@@ -15,6 +15,12 @@ from app.server import LokiMCPServer
 class TestMCPProtocolCompliance:
     """Test MCP protocol compliance."""
     
+    @pytest.fixture(autouse=True)
+    def clear_cache(self):
+        """Clear label cache before each test."""
+        from app.tools.get_labels import clear_label_cache
+        clear_label_cache()
+    
     @pytest.fixture
     def mock_config(self) -> LokiConfig:
         """Create a mock Loki configuration for testing."""
@@ -121,7 +127,7 @@ class TestMCPProtocolCompliance:
         assert schema.get("required", []) == []
     
     @pytest.mark.asyncio
-    @patch('app.tools.query_logs.LokiClient')
+    @patch('app.tools.query_logs.EnhancedLokiClient')
     async def test_tool_handler_methods(self, mock_client_class, server: LokiMCPServer):
         """Test tool handler methods directly."""
         # Mock the Loki client
@@ -151,7 +157,7 @@ class TestMCPProtocolCompliance:
         assert "Test log message" in result.entries[0]["line"]
     
     @pytest.mark.asyncio
-    @patch('app.tools.search_logs.LokiClient')
+    @patch('app.tools.search_logs.EnhancedLokiClient')
     async def test_search_logs_handler(self, mock_client_class, server: LokiMCPServer):
         """Test search_logs handler directly."""
         # Mock the Loki client
@@ -181,7 +187,7 @@ class TestMCPProtocolCompliance:
         assert "Error occurred in test" in result.entries[0]["line"]
     
     @pytest.mark.asyncio
-    @patch('app.tools.get_labels.LokiClient')
+    @patch('app.tools.get_labels.EnhancedLokiClient')
     async def test_get_labels_handler(self, mock_client_class, server: LokiMCPServer):
         """Test get_labels handler directly."""
         # Mock the Loki client
@@ -212,7 +218,7 @@ class TestMCPProtocolCompliance:
             pass  # Expected
     
     @pytest.mark.asyncio
-    @patch('app.tools.query_logs.LokiClient')
+    @patch('app.tools.query_logs.EnhancedLokiClient')
     async def test_execution_error_handling(self, mock_client_class, server: LokiMCPServer):
         """Test tool execution error handling."""
         # Mock the Loki client to raise an exception

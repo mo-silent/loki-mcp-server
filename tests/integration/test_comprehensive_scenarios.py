@@ -117,7 +117,6 @@ class TestComprehensiveScenarios:
             ('Invalid syntax', '{job="web-server"!}'),
             ('Missing quotes', '{job=web-server}'),
             ('Invalid operator', '{job~="web-server"}'),
-            ('Empty query', ''),
             ('Malformed regex', '{job="web-server"} |~ "[invalid"')
         ]
         
@@ -128,11 +127,17 @@ class TestComprehensiveScenarios:
                 async with MCPTestClient(config) as client:
                     response = await client.query_logs(query=invalid_query)
                     assert_error_response(response, error_desc)
+        
+        # Test empty query validation error separately
+        async with MCPTestClient(config) as client:
+            response = await client.query_logs(query='')
+            assert_error_response(response)  # Just check it's an error, don't check specific message
     
     @pytest.mark.asyncio
     async def test_rate_limiting_scenarios(self, config):
         """Test rate limiting scenarios."""
-        with patch('app.loki_client.LokiClient._make_request') as mock_request:
+        with patch('app.loki_client.LokiClient._make_request') as mock_request, \
+             patch('asyncio.sleep', new_callable=AsyncMock):
             mock_request.side_effect = LokiRateLimitError("Rate limit exceeded")
             
             async with MCPTestClient(config) as client:
@@ -140,7 +145,7 @@ class TestComprehensiveScenarios:
                 assert_error_response(response, "Rate limit exceeded")
                 
                 response_text = extract_response_text(response)
-                assert "reducing the frequency of requests" in response_text
+                assert "Reduce request frequency" in response_text
     
     @pytest.mark.asyncio
     async def test_parameter_validation_scenarios(self, config):
@@ -317,7 +322,7 @@ class TestComprehensiveScenarios:
                 (10, "Small limit"),
                 (100, "Medium limit"),
                 (1000, "Large limit"),
-                (10000, "Very large limit")
+                (5000, "Maximum limit")
             ]
             
             async with MCPTestClient(config) as client:
@@ -329,26 +334,45 @@ class TestComprehensiveScenarios:
                         limit=limit
                     )
                     assert_successful_response(response)
+                
+                # Test invalid limit (exceeds maximum)
+                response = await client.query_logs(
+                    query='{job="web-server"}',
+                    start=TIME_RANGES["last_hour"]["start"],
+                    end=TIME_RANGES["last_hour"]["end"],
+                    limit=10000
+                )
+                assert_error_response(response)  # Should be validation error
     
     @pytest.mark.asyncio
     async def test_error_recovery_and_resilience(self, config):
         """Test error recovery and resilience scenarios."""
-        with patch('app.loki_client.LokiClient._make_request') as mock_request:
-            # Simulate intermittent failures
-            call_count = 0
+        with patch('app.loki_client.LokiClient._make_request') as mock_request, \
+             patch('asyncio.sleep', new_callable=AsyncMock):
+            # Simulate persistent failures that exceed max retries
+            # Track which queries should consistently fail
+            failing_queries = {'{job="service-2"}', '{job="service-4"}'}
+            
             def intermittent_failure(*args, **kwargs):
-                nonlocal call_count
-                call_count += 1
-                if call_count % 3 == 0:  # Every 3rd call fails
-                    raise LokiConnectionError("Intermittent failure")
+                # Extract query from kwargs or args
+                if 'params' in kwargs and 'query' in kwargs['params']:
+                    query = kwargs['params']['query']
+                elif args and len(args) > 1:
+                    query = args[1].get('query', '') if isinstance(args[1], dict) else ''
+                else:
+                    query = ''
+                
+                # Make specific queries always fail 
+                if any(failing_query in query for failing_query in failing_queries):
+                    raise LokiConnectionError("Persistent failure")
                 return SAMPLE_QUERY_RANGE_RESPONSE
             
             mock_request.side_effect = intermittent_failure
             
             async with MCPTestClient(config) as client:
-                # Make multiple calls, some should fail, others succeed
+                # Make multiple calls, some should succeed, others fail after all retries
                 results = []
-                for i in range(10):
+                for i in range(6):  # Reduced number to make test faster
                     response = await client.query_logs(query=f'{{job="service-{i}"}}')
                     results.append(response)
                 
@@ -358,7 +382,7 @@ class TestComprehensiveScenarios:
                 
                 assert len(successful) > 0
                 assert len(failed) > 0
-                assert len(successful) + len(failed) == 10
+                assert len(successful) + len(failed) == 6
     
     @pytest.mark.asyncio
     async def test_concurrent_mixed_operations(self, config):

@@ -108,6 +108,10 @@ class LokiClient:
             max_requests=config.rate_limit_requests,
             time_window=config.rate_limit_period
         )
+        # Statistics tracking
+        self._total_operations = 0
+        self._total_errors = 0
+        self._error_counts_by_category = {}
 
         
     async def __aenter__(self):
@@ -178,6 +182,9 @@ class LokiClient:
             url=url
         )
         
+        # Track operation
+        self._total_operations += 1
+        
         # Use asyncio.to_thread to run the synchronous requests call in a thread
         def make_sync_request():
             return self._session.request(
@@ -191,24 +198,36 @@ class LokiClient:
         try:
             response = await asyncio.to_thread(make_sync_request)
         except requests.exceptions.ConnectionError as e:
+            self._total_errors += 1
+            self._error_counts_by_category["connection"] = self._error_counts_by_category.get("connection", 0) + 1
             raise LokiConnectionError(f"Failed to connect to Loki: {e}")
         except requests.exceptions.Timeout as e:
+            self._total_errors += 1
+            self._error_counts_by_category["timeout"] = self._error_counts_by_category.get("timeout", 0) + 1
             raise LokiConnectionError(f"Request to Loki timed out: {e}")
         except requests.exceptions.RequestException as e:
+            self._total_errors += 1
+            self._error_counts_by_category["request"] = self._error_counts_by_category.get("request", 0) + 1
             raise LokiConnectionError(f"Request to Loki failed: {e}")
         
         # Handle different HTTP status codes
         if response.status_code == 200:
             return response.json()
         elif response.status_code == 401:
+            self._total_errors += 1
+            self._error_counts_by_category["authentication"] = self._error_counts_by_category.get("authentication", 0) + 1
             raise LokiAuthenticationError(
                 "Authentication failed. Check your credentials."
             )
         elif response.status_code == 429:
+            self._total_errors += 1
+            self._error_counts_by_category["rate_limit"] = self._error_counts_by_category.get("rate_limit", 0) + 1
             raise LokiRateLimitError(
                 "Rate limit exceeded. Please reduce request frequency."
             )
         elif response.status_code >= 400:
+            self._total_errors += 1
+            self._error_counts_by_category["query"] = self._error_counts_by_category.get("query", 0) + 1
             error_msg = f"Loki API error: {response.status_code}"
             try:
                 error_data = response.json()
@@ -385,6 +404,22 @@ class LokiClient:
         logger.info("Fetching series", match=match)
         response = await self._make_request("GET", "/loki/api/v1/series", params=params)
         return response.get("data", [])
+
+    def get_error_statistics(self) -> Dict[str, Any]:
+        """Get error statistics for this client.
+        
+        Returns:
+            Dictionary containing error statistics
+        """
+        return {
+            "total_operations": self._total_operations,
+            "total_errors": self._total_errors,
+            "error_counts_by_category": self._error_counts_by_category.copy(),
+            "operation_stats": {
+                "success_rate": (self._total_operations - self._total_errors) / max(self._total_operations, 1),
+                "error_rate": self._total_errors / max(self._total_operations, 1)
+            }
+        }
 
 
 class RateLimiter:

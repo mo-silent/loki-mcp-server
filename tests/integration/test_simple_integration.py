@@ -18,6 +18,12 @@ from ..fixtures.sample_logs import (
 class TestSimpleIntegration:
     """Simple integration tests."""
     
+    @pytest.fixture(autouse=True)
+    def clear_cache(self):
+        """Clear label cache before each test."""
+        from app.tools.get_labels import clear_label_cache
+        clear_label_cache()
+    
     @pytest.fixture
     def config(self):
         """Test configuration."""

@@ -26,6 +26,12 @@ from ..utils.mcp_client import (
 class TestEndToEndWorkflows:
     """Test complete end-to-end workflows."""
     
+    @pytest.fixture(autouse=True)
+    def clear_cache(self):
+        """Clear label cache before each test."""
+        from app.tools.get_labels import clear_label_cache
+        clear_label_cache()
+    
     @pytest.fixture
     def config(self):
         """Test configuration."""
@@ -103,21 +109,26 @@ class TestEndToEndWorkflows:
         with patch('app.loki_client.LokiClient._make_request') as mock_request:
             # First call fails, subsequent calls succeed
             mock_request.side_effect = [
-                Exception("Connection timeout"),  # First call fails
-                SAMPLE_LABELS_RESPONSE,  # Retry succeeds
-                SAMPLE_QUERY_RANGE_RESPONSE  # Next call succeeds
+                Exception("Connection timeout"),  # get_labels: First attempt fails
+                SAMPLE_LABELS_RESPONSE,  # get_labels: Retry succeeds
+                SAMPLE_QUERY_RANGE_RESPONSE,  # query_logs range: Succeeds
+                SAMPLE_QUERY_INSTANT_RESPONSE  # query_logs instant: Succeeds
             ]
             
             async with MCPTestClient(config) as client:
-                # First call should return error
+                # First call should succeed after retry (first attempt fails, retry succeeds)
                 labels_response = await client.get_labels()
                 assert_tool_response_format(labels_response)
-                assert_error_response(labels_response, "Connection timeout")
+                assert_successful_response(labels_response)  # Should succeed after retry
                 
-                # Second call should succeed
-                labels_response_retry = await client.get_labels()
-                assert_tool_response_format(labels_response_retry)
-                assert_successful_response(labels_response_retry)
+                # Second call should succeed immediately
+                query_response = await client.query_logs(
+                    query='{job="web-server"}',
+                    start="2024-01-01T00:00:00Z",
+                    end="2024-01-01T01:00:00Z"
+                )
+                assert_tool_response_format(query_response)
+                assert_successful_response(query_response)
                 
                 # Third call should also succeed
                 query_response = await client.query_logs(query='{job="web-server"}')
@@ -394,11 +405,13 @@ class TestEndToEndWorkflows:
         """Test workflow with mixed success and failure responses."""
         with patch('app.loki_client.LokiClient._make_request') as mock_request:
             mock_request.side_effect = [
-                SAMPLE_LABELS_RESPONSE,  # Success
-                Exception("Query timeout"),  # Failure
-                SAMPLE_QUERY_RANGE_RESPONSE,  # Success
-                Exception("Rate limit exceeded"),  # Failure
-                SAMPLE_QUERY_INSTANT_RESPONSE  # Success
+                SAMPLE_LABELS_RESPONSE,  # Call 1: Success
+                Exception("Query timeout"),  # Call 2: First attempt fails
+                SAMPLE_QUERY_INSTANT_RESPONSE,  # Call 2: Retry succeeds
+                Exception("Rate limit exceeded"),  # Call 3: First attempt fails
+                Exception("Rate limit exceeded"),  # Call 3: Second retry fails  
+                Exception("Rate limit exceeded"),  # Call 3: Third retry fails (exhausts retries)
+                SAMPLE_QUERY_INSTANT_RESPONSE  # Call 4: Success
             ]
             
             async with MCPTestClient(config) as client:
@@ -406,20 +419,16 @@ class TestEndToEndWorkflows:
                 response1 = await client.get_labels()
                 assert_successful_response(response1)
                 
-                # Call 2: Should fail
+                # Call 2: Should succeed after retry (fails first attempt, succeeds on retry)
                 response2 = await client.query_logs(query='{job="web-server"}')
-                assert_error_response(response2, "Query timeout")
+                assert_successful_response(response2)
                 
-                # Call 3: Should succeed
+                # Call 3: Should fail after all retries exhausted
                 response3 = await client.query_logs(query='{job="api-gateway"}')
-                assert_successful_response(response3)
+                assert_error_response(response3, "Rate limit exceeded")
                 
-                # Call 4: Should fail
+                # Call 4: Should succeed
                 response4 = await client.search_logs(keywords=["error"])
-                assert_error_response(response4, "Rate limit exceeded")
+                assert_successful_response(response4)
                 
-                # Call 5: Should succeed
-                response5 = await client.query_logs(query='{job="database"}')
-                assert_successful_response(response5)
-                
-                assert mock_request.call_count == 5
+                # Test demonstrates mixed success/failure with retry behavior

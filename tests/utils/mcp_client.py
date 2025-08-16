@@ -25,19 +25,8 @@ class MockMCPClient:
     
     async def list_tools(self) -> List[types.Tool]:
         """List available tools from the server."""
-        # Create a mock request to get tools
-        from mcp.types import ListToolsRequest
-        request = ListToolsRequest()
-        
-        # Use the server's request handlers
+        # Directly create the tools list like the server does
         try:
-            # Access the list_tools handler through the server's request handlers
-            for handler_name, handler in self.server.server.request_handlers.items():
-                if "tools/list" in handler_name:
-                    result = await handler(request)
-                    return result.tools if hasattr(result, 'tools') else []
-            
-            # Fallback: manually create tools list
             from app.tools.query_logs import create_query_logs_tool
             from app.tools.search_logs import create_search_logs_tool
             from app.tools.get_labels import create_get_labels_tool
@@ -69,23 +58,18 @@ class MockMCPClient:
     ) -> List[types.TextContent]:
         """Call a tool on the server."""
         # Create a mock request to call tool
-        from mcp.types import CallToolRequest
+        from mcp.types import CallToolRequest, CallToolRequestParams
+        params = CallToolRequestParams(
+            name=name,
+            arguments=arguments
+        )
         request = CallToolRequest(
             method="tools/call",
-            params={
-                "name": name,
-                "arguments": arguments or {}
-            }
+            params=params
         )
         
         try:
-            # Use the server's request handlers
-            for handler_name, handler in self.server.server.request_handlers.items():
-                if "tools/call" in handler_name:
-                    result = await handler(request)
-                    return result.content if hasattr(result, 'content') else []
-            
-            # Fallback: directly call the server's tool handlers
+            # Directly call the server's tool handlers
             if name == "query_logs":
                 result = await self.server._handle_query_logs(arguments or {})
             elif name == "search_logs":

@@ -85,6 +85,12 @@ def _get_cached_labels(cache_key: str) -> Optional[Dict[str, Any]]:
     return None
 
 
+def clear_label_cache() -> None:
+    """Clear the label cache. Useful for testing."""
+    global _label_cache
+    _label_cache.clear()
+
+
 async def get_labels_tool(
     params: GetLabelsParams,
     config: LokiConfig
