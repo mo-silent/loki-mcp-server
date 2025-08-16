@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "loki": {
+      "command": "loki-mcp-server",
+      "env": {
+        "LOKI_URL": "http://localhost:3100"
+      }
+    }
+  }
+}

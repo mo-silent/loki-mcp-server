@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  loki:
+    image: grafana/loki:2.9.0
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - ./loki-config.yaml:/etc/loki/local-config.yaml
+      - loki-data:/loki
+    networks:
+      - loki-network
+
+  promtail:
+    image: grafana/promtail:2.9.0
+    volumes:
+      - /var/log:/var/log:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - ./promtail-config.yaml:/etc/promtail/config.yml
+    command: -config.file=/etc/promtail/config.yml
+    networks:
+      - loki-network
+    depends_on:
+      - loki
+
+  # Example application that generates logs
+  log-generator:
+    image: mingrammer/flog
+    command: 
+      - -f
+      - json
+      - -o
+      - /var/log/app.log
+      - -t
+      - log
+      - -w
+    volumes:
+      - app-logs:/var/log
+    networks:
+      - loki-network
+
+  # MCP Server (for testing)
+  loki-mcp-server:
+    build:
+      context: ../..
+      dockerfile: examples/docker/Dockerfile
+    environment:
+      - LOKI_URL=http://loki:3100
+    depends_on:
+      - loki
+    networks:
+      - loki-network
+    stdin_open: true
+    tty: true
+
+volumes:
+  loki-data:
+  app-logs:
+
+networks:
+  loki-network:
+    driver: bridge
