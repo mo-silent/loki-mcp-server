@@ -366,6 +366,30 @@ def setup_default_logging(level: Optional[str] = None) -> None:
     log_level = (level or os.getenv('LOKI_LOG_LEVEL', 'INFO')).upper()
     log_format = os.getenv('LOKI_LOG_FORMAT', 'console').lower()
     
+    # For MCP stdio transport, disable logging to avoid interfering with JSON communication
+    if os.getenv('MCP_STDIO_MODE') == '1' or '--stdio' in sys.argv or 'stdio' in sys.argv:
+        # Configure minimal logging that outputs to stderr only
+        logging.basicConfig(
+            format="%(message)s",
+            stream=sys.stderr,
+            level=logging.CRITICAL
+        )
+        
+        # Configure structlog with minimal processors that don't output to stdout
+        structlog.configure(
+            processors=[
+                structlog.stdlib.add_log_level,
+                structlog.stdlib.PositionalArgumentsFormatter(),
+                structlog.processors.StackInfoRenderer(),
+                structlog.processors.format_exc_info,
+                lambda logger, method_name, event_dict: ""  # Drop all log output
+            ],
+            wrapper_class=structlog.stdlib.BoundLogger,
+            logger_factory=LoggerFactory(),
+            cache_logger_on_first_use=True,
+        )
+        return
+    
     # Configure logging
     configure_logging(
         level=log_level,

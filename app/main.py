@@ -152,6 +152,10 @@ async def main() -> None:
     # Parse command-line arguments
     args = parse_arguments()
     
+    # Set environment variable for stdio mode detection
+    if args.transport == 'stdio':
+        os.environ['MCP_STDIO_MODE'] = '1'
+    
     # Set up logging with specified level
     setup_default_logging(level=args.log_level)
     logger = structlog.get_logger(__name__)
