@@ -9,7 +9,10 @@ from typing import Optional
 
 import structlog
 
-from .logging_config import setup_default_logging
+try:
+    from app.logging_config import setup_default_logging
+except ImportError:
+    from .logging_config import setup_default_logging
 
 
 class GracefulShutdown:
@@ -55,7 +58,10 @@ async def validate_startup(config) -> bool:
     
     try:
         # Test Loki connectivity
-        from .loki_client import LokiClient
+        try:
+            from app.loki_client import LokiClient
+        except ImportError:
+            from .loki_client import LokiClient
         
         client = LokiClient(config)
         
@@ -158,8 +164,12 @@ async def main() -> None:
     )
     
     try:
-        from .server import create_server
-        from .config import load_config, ConfigurationError
+        try:
+            from app.server import create_server
+            from app.config import load_config, ConfigurationError
+        except ImportError:
+            from .server import create_server
+            from .config import load_config, ConfigurationError
         
         # Load and validate configuration
         try:
