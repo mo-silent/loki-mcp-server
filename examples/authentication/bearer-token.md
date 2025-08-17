@@ -246,8 +246,10 @@ loki-mcp-server
 ```python
 import pytest
 import os
+import asyncio
 from app.config import LokiConfig
 from app.enhanced_client import EnhancedLokiClient
+from app.loki_client import LokiClientError
 
 @pytest.mark.asyncio
 async def test_bearer_token_auth():
@@ -271,6 +273,33 @@ async def test_invalid_token():
     with pytest.raises(LokiClientError):
         async with EnhancedLokiClient(config) as client:
             await client.label_names()
+
+# Manual test function
+async def test_bearer_connection():
+    """Test bearer token connection manually"""
+    config = LokiConfig(
+        url="https://loki.example.com",
+        bearer_token="your-token-here"
+    )
+    
+    try:
+        async with EnhancedLokiClient(config) as client:
+            labels = await client.label_names()
+            print(f"✅ Authentication successful! Found {len(labels)} labels.")
+            
+            # Test query capability  
+            response = await client.query_range(
+                query="{}",
+                start="1h", 
+                end="now",
+                limit=5
+            )
+            print(f"✅ Query successful!")
+    except Exception as e:
+        print(f"❌ Authentication failed: {e}")
+
+if __name__ == "__main__":
+    asyncio.run(test_bearer_connection())
 ```
 
 ## Security Best Practices
@@ -437,6 +466,6 @@ def migrate_token_format(old_token):
 ## Related Documentation
 
 - [Basic Authentication](basic-auth.md)
-- [OAuth2 Authentication](oauth2.md)  
-- [TLS Configuration](../production/tls.md)
-- [Security Best Practices](../production/security.md)
+- [Claude Desktop Configuration](../claude-desktop/README.md)
+- [Docker Setup](../docker/README.md)
+- [Development Setup](../development/local-setup.md)

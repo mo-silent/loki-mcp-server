@@ -193,7 +193,12 @@ ruff check . --fix
 #### Enable Debug Logging
 ```bash
 export PYTHONPATH=.
-python -m app.main --debug
+export DEBUG=true
+export LOG_LEVEL=DEBUG
+loki-mcp-server
+
+# Alternative: set environment variables inline
+DEBUG=true LOG_LEVEL=DEBUG loki-mcp-server
 ```
 
 #### VS Code Configuration
@@ -207,10 +212,12 @@ Create `.vscode/launch.json`:
       "name": "Debug MCP Server",
       "type": "python",
       "request": "launch",
-      "module": "app.main",
+      "program": "${workspaceFolder}/app/main.py",
       "env": {
         "LOKI_URL": "http://localhost:3100",
-        "PYTHONPATH": "${workspaceFolder}"
+        "PYTHONPATH": "${workspaceFolder}",
+        "DEBUG": "true",
+        "LOG_LEVEL": "DEBUG"
       },
       "console": "integratedTerminal"
     }

@@ -123,18 +123,26 @@ Modify `loki-config.yaml` for your needs:
 
 ### Environment Variables
 
-Create a `.env` file for custom settings:
+Create a `.env` file for custom settings (copy from `.env.example`):
 
+```bash
+# Copy the example file
+cp .env.example .env
+
+# Edit with your settings
+nano .env
+```
+
+Example `.env` content:
 ```env
+LOKI_URL=http://loki:3100
+DEBUG=true
+LOG_LEVEL=DEBUG
 LOKI_PORT=3100
 PROMTAIL_PORT=9080
-MCP_DEBUG=true
 ```
 
-Then reference in docker-compose.yml:
-```yaml
-env_file: .env
-```
+The environment variables are automatically loaded by docker-compose.
 
 ## Troubleshooting
 

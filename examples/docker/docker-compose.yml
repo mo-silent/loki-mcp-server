@@ -47,6 +47,10 @@ services:
       dockerfile: examples/docker/Dockerfile
     environment:
       - LOKI_URL=http://loki:3100
+      - DEBUG=${DEBUG:-false}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    env_file:
+      - .env.example
     depends_on:
       - loki
     networks:

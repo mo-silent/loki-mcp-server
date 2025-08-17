@@ -48,13 +48,25 @@ async def test_connection():
     try:
         config = load_config()
         print(f"Testing connection to: {config.url}")
+        print(f"Using authentication: {'Token' if config.bearer_token else 'Basic' if config.username else 'None'}")
         
         async with EnhancedLokiClient(config) as client:
+            # Test basic connectivity
             labels = await client.label_names()
             print(f"✅ Connection successful! Found {len(labels)} labels.")
+            
+            # Test query capability
+            response = await client.query_range(
+                query="{}",
+                start="1h",
+                end="now",
+                limit=1
+            )
+            print(f"✅ Query test successful!")
             return True
     except Exception as e:
         print(f"❌ Connection failed: {e}")
+        print(f"Error type: {type(e).__name__}")
         return False
 
 if __name__ == "__main__":
@@ -696,7 +708,13 @@ logger.setLevel(logging.DEBUG)
 
 1. **Enable debug mode**:
    ```bash
+   # Set environment variables and run
    DEBUG=true LOG_LEVEL=DEBUG loki-mcp-server
+   
+   # Or export them first
+   export DEBUG=true
+   export LOG_LEVEL=DEBUG
+   loki-mcp-server
    ```
 
 2. **Test basic connectivity**:

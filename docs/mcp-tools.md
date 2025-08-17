@@ -12,6 +12,10 @@ The Loki MCP Server provides three main tools for log analysis:
 
 Each tool follows the MCP (Model Context Protocol) specification and returns structured data that can be processed by AI assistants.
 
+## Time Format Support
+
+All tools support flexible time formats for start/end parameters. See [Time Formats Documentation](time-formats.md) for complete details on supported formats including relative time (`5m`, `1h`), absolute time (ISO 8601, Unix timestamps), and special keywords (`now`).
+
 ## Tool: query_logs
 
 Execute LogQL queries against Grafana Loki with support for both range and instant queries.
@@ -331,6 +335,11 @@ Search logs using keywords with support for advanced filtering, logical operator
           "keyword": "database",
           "context": "...Database connection error: timeout...",
           "position": 0
+        },
+        {
+          "keyword": "error",
+          "context": "...connection error: timeout after 30s...",
+          "position": 19
         }
       ]
     }
@@ -351,8 +360,11 @@ Search logs using keywords with support for advanced filtering, logical operator
 
 #### entries
 Extended with search-specific fields:
-- `matched_keywords`: Keywords found in this entry
-- `context`: Context around each matched keyword
+- `matched_keywords`: Array of keywords that were found in this log entry
+- `context`: Array of context objects, each containing:
+  - `keyword`: The matched keyword
+  - `context`: Text snippet showing the keyword in context (with ellipsis if truncated)
+  - `position`: Character position of the keyword in the original log line
 
 #### search_terms
 - **Type**: Array of strings
@@ -458,7 +470,12 @@ Discover available log labels and their values from Loki, with caching support f
 - **Description**: Whether to use cached label information
 - **Default**: true
 - **Benefits**: Improves performance for repeated queries
-- **Cache Duration**: 5 minutes (configurable)
+- **Cache Duration**: 5 minutes (300 seconds)
+- **Cache Key**: Based on label_name, start, and end parameters
+- **Cache Behavior**: 
+  - Automatic expiration after TTL
+  - Memory-based storage (not persistent)
+  - Thread-safe for concurrent requests
 
 ### Response Schema
 

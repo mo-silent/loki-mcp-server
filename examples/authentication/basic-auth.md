@@ -126,19 +126,33 @@ loki-mcp-server
 
 ```python
 import os
+import asyncio
 from app.config import load_config
 from app.enhanced_client import EnhancedLokiClient
 
-# Set environment variables
-os.environ['LOKI_URL'] = 'http://loki.example.com'
-os.environ['LOKI_USERNAME'] = 'your-username'
-os.environ['LOKI_PASSWORD'] = 'your-password'
+async def test_basic_auth():
+    # Set environment variables
+    os.environ['LOKI_URL'] = 'http://loki.example.com'
+    os.environ['LOKI_USERNAME'] = 'your-username'
+    os.environ['LOKI_PASSWORD'] = 'your-password'
 
-# Test connection
-config = load_config()
-async with EnhancedLokiClient(config) as client:
-    labels = await client.label_names()
-    print(f"Available labels: {labels}")
+    # Test connection
+    config = load_config()
+    async with EnhancedLokiClient(config) as client:
+        labels = await client.label_names()
+        print(f"Available labels: {labels}")
+        
+        # Test a simple query
+        response = await client.query_range(
+            query="{}",
+            start="1h",
+            end="now",
+            limit=5
+        )
+        print(f"Query successful, found {len(response.get('data', {}).get('result', []))} streams")
+
+if __name__ == "__main__":
+    asyncio.run(test_basic_auth())
 ```
 
 ## Security Considerations
@@ -258,6 +272,6 @@ else:
 ## Related Documentation
 
 - [Bearer Token Authentication](bearer-token.md)
-- [OAuth2 Authentication](oauth2.md)
-- [TLS Configuration](../production/tls.md)
-- [Security Best Practices](../production/security.md)
+- [Claude Desktop Configuration](../claude-desktop/README.md)
+- [Docker Setup](../docker/README.md)
+- [Development Setup](../development/local-setup.md)
