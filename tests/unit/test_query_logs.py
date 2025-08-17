@@ -200,35 +200,35 @@ class TestQueryLogsTool:
             assert result.time_range["end"] == "now"
             assert result.error is None
             
-            # Verify client was called correctly
-            mock_client.query_range.assert_called_once_with(
-                query='{job="test"}',
-                start="1h",
-                end="now",
-                limit=100,
-                direction="backward"
-            )
+            # Verify client was called correctly with converted times
+            mock_client.query_range.assert_called_once()
+            call_args = mock_client.query_range.call_args
+            assert call_args[1]["query"] == '{job="test"}'
+            assert call_args[1]["start"].endswith('Z')  # Should be RFC3339 format
+            assert call_args[1]["end"].endswith('Z')    # Should be RFC3339 format
+            assert call_args[1]["limit"] == 100
+            assert call_args[1]["direction"] == "backward"
     
-    async def test_successful_instant_query(self, mock_config, sample_loki_response):
-        """Test successful instant query execution."""
+    async def test_successful_query_without_time_range(self, mock_config, sample_loki_response):
+        """Test successful query execution without explicit time range."""
         params = QueryLogsParams(query='{job="test"}')
         
         with patch('app.tools.query_logs.EnhancedLokiClient') as mock_client_class:
             mock_client = AsyncMock()
             mock_client_class.return_value.__aenter__.return_value = mock_client
-            mock_client.query_instant.return_value = sample_loki_response
+            mock_client.query_range.return_value = sample_loki_response
             
             result = await query_logs_tool(params, mock_config)
             
             assert result.status == "success"
             assert result.total_entries == 2
             
-            # Verify instant query was called
-            mock_client.query_instant.assert_called_once_with(
-                query='{job="test"}',
-                limit=100,
-                direction="backward"
-            )
+            # Verify range query was called with default time range
+            mock_client.query_range.assert_called_once()
+            call_args = mock_client.query_range.call_args
+            assert call_args[1]["query"] == '{job="test"}'
+            assert call_args[1]["start"].endswith('Z')  # Should be RFC3339 format
+            assert call_args[1]["end"].endswith('Z')    # Should be RFC3339 format
     
     async def test_loki_client_error(self, mock_config):
         """Test handling of Loki client errors."""
@@ -237,7 +237,7 @@ class TestQueryLogsTool:
         with patch('app.tools.query_logs.EnhancedLokiClient') as mock_client_class:
             mock_client = AsyncMock()
             mock_client_class.return_value.__aenter__.return_value = mock_client
-            mock_client.query_instant.side_effect = LokiClientError("Connection failed")
+            mock_client.query_range.side_effect = LokiClientError("Connection failed")
             
             result = await query_logs_tool(params, mock_config)
             

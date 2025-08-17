@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field, field_validator
 from ..enhanced_client import EnhancedLokiClient
 from ..loki_client import LokiClientError
 from ..config import LokiConfig
+from ..time_utils import get_time_range
 
 logger = structlog.get_logger(__name__)
 
@@ -78,26 +79,16 @@ async def query_logs_tool(
     
     try:
         async with EnhancedLokiClient(config) as client:
-            # Determine if this is a range query or instant query
-            if params.start or params.end:
-                # Range query
-                start_time = params.start or "1h"  # Default to 1 hour ago
-                end_time = params.end or "now"
-                
-                response = await client.query_range(
-                    query=params.query,
-                    start=start_time,
-                    end=end_time,
-                    limit=params.limit,
-                    direction=params.direction
-                )
-            else:
-                # Instant query
-                response = await client.query_instant(
-                    query=params.query,
-                    limit=params.limit,
-                    direction=params.direction
-                )
+            # Always use range queries with proper time conversion
+            start_time, end_time = get_time_range(params.start, params.end)
+            
+            response = await client.query_range(
+                query=params.query,
+                start=start_time,
+                end=end_time,
+                limit=params.limit,
+                direction=params.direction
+            )
             
             # Format the response
             formatted_entries = _format_loki_response(response)

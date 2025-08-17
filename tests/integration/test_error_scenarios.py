@@ -132,7 +132,7 @@ class TestLokiClientErrorScenarios:
                     return mock_response
             
             with patch.object(client._session, 'request', side_effect=mock_request):
-                with patch('asyncio.sleep', new_callable=AsyncMock):
+                with patch('asyncio.sleep', return_value=None):
                     # Current implementation doesn't have retry logic, so it should fail on first 500 error
                     with pytest.raises(LokiQueryError) as exc_info:
                         await client.query_instant("up")
@@ -146,7 +146,7 @@ class TestLokiClientErrorScenarios:
         async with LokiClient(test_config) as client:
             # Mock consistent failures
             with patch.object(client._session, 'request', side_effect=requests.exceptions.ConnectionError("Connection refused")):
-                with patch('asyncio.sleep', new_callable=AsyncMock):
+                with patch('asyncio.sleep', return_value=None):
                     # Make multiple failing requests to trigger circuit breaker
                     for _ in range(6):  # More than failure threshold
                         with pytest.raises(LokiConnectionError):
@@ -201,7 +201,7 @@ class TestToolErrorHandling:
         with patch('app.tools.query_logs.EnhancedLokiClient') as mock_client_class:
             mock_client = AsyncMock()
             mock_client.__aenter__.return_value = mock_client
-            mock_client.query_instant.side_effect = LokiConnectionError("Connection failed")
+            mock_client.query_range.side_effect = LokiConnectionError("Connection failed")
             mock_client_class.return_value = mock_client
             
             result = await query_logs_tool(params, test_config)
@@ -218,7 +218,7 @@ class TestToolErrorHandling:
         with patch('app.tools.search_logs.EnhancedLokiClient') as mock_client_class:
             mock_client = AsyncMock()
             mock_client.__aenter__.return_value = mock_client
-            mock_client.query_instant.side_effect = LokiAuthenticationError("Auth failed")
+            mock_client.query_range.side_effect = LokiAuthenticationError("Auth failed")
             mock_client_class.return_value = mock_client
             
             result = await search_logs_tool(params, test_config)
@@ -449,7 +449,7 @@ class TestErrorRecoveryScenarios:
                     return mock_response
             
             with patch.object(client._session, 'request', side_effect=mock_request):
-                with patch('asyncio.sleep', new_callable=AsyncMock):
+                with patch('asyncio.sleep', return_value=None):
                     # First request should fail immediately (no retry logic)
                     with pytest.raises(LokiConnectionError):
                         await client.query_instant("up")
@@ -498,7 +498,7 @@ class TestErrorRecoveryScenarios:
         with patch('app.tools.search_logs.EnhancedLokiClient') as mock_client_class:
             mock_client = AsyncMock()
             mock_client.__aenter__.return_value = mock_client
-            mock_client.query_instant.side_effect = mock_query_range
+            mock_client.query_range.side_effect = mock_query_range
             mock_client_class.return_value = mock_client
             
             result = await search_logs_tool(params, test_config)

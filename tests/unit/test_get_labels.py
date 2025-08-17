@@ -247,12 +247,12 @@ class TestGetLabelsTool:
             assert result.total_count == 3
             assert result.cached is False
             
-            # Verify client was called correctly
-            mock_client.label_values.assert_called_once_with(
-                label="job",
-                start="1h",
-                end="now"
-            )
+            # Verify client was called correctly with converted times
+            mock_client.label_values.assert_called_once()
+            call_args = mock_client.label_values.call_args
+            assert call_args[1]["label"] == "job"
+            assert call_args[1]["start"].endswith('Z')  # Should be RFC3339 format
+            assert call_args[1]["end"].endswith('Z')    # Should be RFC3339 format
     
     async def test_cache_hit(self, mock_config):
         """Test cache hit scenario."""

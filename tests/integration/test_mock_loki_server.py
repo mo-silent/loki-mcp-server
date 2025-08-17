@@ -37,15 +37,14 @@ class TestMockLokiServerIntegration:
     @pytest.mark.asyncio
     async def test_successful_query_range(self, config, mock_server):
         """Test successful range query with mock server."""
-        # Setup mock response
         mock_server.set_response(
             "/loki/api/v1/query_range",
             "GET",
             SAMPLE_QUERY_RANGE_RESPONSE
         )
         
-        with patch('app.loki_client.LokiClient._make_request') as mock_request:
-            mock_request.return_value = SAMPLE_QUERY_RANGE_RESPONSE
+        mock_request = AsyncMock(return_value=SAMPLE_QUERY_RANGE_RESPONSE)
+        with patch('app.loki_client.LokiClient._make_request', mock_request):
             
             async with LokiClient(config) as client:
                 result = await client.query_range(
@@ -58,7 +57,6 @@ class TestMockLokiServerIntegration:
                 assert result["data"]["resultType"] == "streams"
                 assert len(result["data"]["result"]) == 2
                 
-                # Verify request was made with correct parameters
                 mock_request.assert_called_once_with(
                     "GET",
                     "/loki/api/v1/query_range",
@@ -79,8 +77,8 @@ class TestMockLokiServerIntegration:
             SAMPLE_QUERY_INSTANT_RESPONSE
         )
         
-        with patch('app.loki_client.LokiClient._make_request') as mock_request:
-            mock_request.return_value = SAMPLE_QUERY_INSTANT_RESPONSE
+        mock_request = AsyncMock(return_value=SAMPLE_QUERY_INSTANT_RESPONSE)
+        with patch('app.loki_client.LokiClient._make_request', mock_request):
             
             async with LokiClient(config) as client:
                 result = await client.query_instant(
@@ -111,8 +109,8 @@ class TestMockLokiServerIntegration:
             SAMPLE_LABELS_RESPONSE
         )
         
-        with patch('app.loki_client.LokiClient._make_request') as mock_request:
-            mock_request.return_value = SAMPLE_LABELS_RESPONSE
+        mock_request = AsyncMock(return_value=SAMPLE_LABELS_RESPONSE)
+        with patch('app.loki_client.LokiClient._make_request', mock_request):
             
             async with LokiClient(config) as client:
                 result = await client.label_names()
@@ -134,8 +132,8 @@ class TestMockLokiServerIntegration:
             SAMPLE_LABEL_VALUES_RESPONSE
         )
         
-        with patch('app.loki_client.LokiClient._make_request') as mock_request:
-            mock_request.return_value = SAMPLE_LABEL_VALUES_RESPONSE
+        mock_request = AsyncMock(return_value=SAMPLE_LABEL_VALUES_RESPONSE)
+        with patch('app.loki_client.LokiClient._make_request', mock_request):
             
             async with LokiClient(config) as client:
                 result = await client.label_values("level")
@@ -151,88 +149,73 @@ class TestMockLokiServerIntegration:
     @pytest.mark.asyncio
     async def test_query_error_handling(self, config, mock_server):
         """Test query error handling."""
-        with patch('app.loki_client.LokiClient._make_request') as mock_request:
-            mock_request.side_effect = LokiQueryError("Invalid query syntax")
+        async with LokiClient(config) as client:
+            # Create an explicit async mock that doesn't use AsyncMock internally
+            async def mock_make_request(*args, **kwargs):
+                raise LokiQueryError("Invalid query syntax")
             
-            async with LokiClient(config) as client:
-                with pytest.raises(LokiQueryError, match="Invalid query syntax"):
-                    await client.query_range(
-                        query='{job="web-server"!}',  # Invalid syntax
-                        start="2024-01-01T00:00:00Z",
-                        end="2024-01-01T01:00:00Z"
-                    )
+            client._make_request = mock_make_request
+            with pytest.raises(LokiQueryError, match="Invalid query syntax"):
+                await client.query_range(
+                    query='{job="web-server"!}',
+                    start="2024-01-01T00:00:00Z",
+                    end="2024-01-01T01:00:00Z"
+                )
     
     @pytest.mark.asyncio
     async def test_connection_error_handling(self, config, mock_server):
         """Test connection error handling."""
-        with patch('app.loki_client.LokiClient._make_request') as mock_request:
-            mock_request.side_effect = LokiConnectionError("Connection refused")
+        async with LokiClient(config) as client:
+            # Create an explicit async mock that doesn't use AsyncMock internally
+            async def mock_make_request(*args, **kwargs):
+                raise LokiConnectionError("Connection refused")
             
-            async with LokiClient(config) as client:
-                with pytest.raises(LokiConnectionError, match="Connection refused"):
-                    await client.query_instant(query='{job="web-server"}')
+            client._make_request = mock_make_request
+            with pytest.raises(LokiConnectionError, match="Connection refused"):
+                await client.query_instant(query='{job="web-server"}')
     
     @pytest.mark.asyncio
     async def test_retry_mechanism(self, config, mock_server):
         """Test that connection errors are properly raised (retry not implemented yet)."""
-        with patch('asyncio.to_thread') as mock_to_thread:
-            # Simulate connection error
-            import requests
-            mock_to_thread.side_effect = requests.exceptions.ConnectionError("Temporary failure")
+        import requests
+        with patch('asyncio.to_thread', side_effect=requests.exceptions.ConnectionError("Temporary failure")) as mock_to_thread:
             
             async with LokiClient(config) as client:
-                # This should fail with connection error
                 with pytest.raises(LokiConnectionError, match="Temporary failure"):
                     await client.query_instant(query='{job="web-server"}')
     
     @pytest.mark.asyncio
     async def test_rate_limiting(self, config):
         """Test rate limiting functionality."""
-        # Set very low rate limits for testing
         config.rate_limit_requests = 2
         config.rate_limit_period = 1
         
-        # Mock the actual HTTP request, not the _make_request method
-        # This way the rate limiter still works
-        with patch('asyncio.to_thread') as mock_to_thread:
-            # Create a mock response
-            mock_response = Mock()
-            mock_response.status_code = 200
-            mock_response.json.return_value = SAMPLE_QUERY_INSTANT_RESPONSE
-            mock_to_thread.return_value = mock_response
-            
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = SAMPLE_QUERY_INSTANT_RESPONSE
+        with patch('asyncio.to_thread', return_value=mock_response) as mock_to_thread:
             async with LokiClient(config) as client:
-                # First two requests should be immediate
                 start_time = asyncio.get_event_loop().time()
                 
                 await client.query_instant(query='{job="test1"}')
                 await client.query_instant(query='{job="test2"}')
-                
-                # Third request should be rate limited
                 await client.query_instant(query='{job="test3"}')
                 
                 end_time = asyncio.get_event_loop().time()
                 
-                # Should have taken at least 1 second due to rate limiting
                 assert end_time - start_time >= 0.9
                 assert mock_to_thread.call_count == 3
     
     @pytest.mark.asyncio
     async def test_concurrent_requests(self, config, mock_server):
         """Test handling of concurrent requests."""
-        with patch('app.loki_client.LokiClient._make_request') as mock_request:
-            mock_request.return_value = SAMPLE_QUERY_INSTANT_RESPONSE
+        mock_request = AsyncMock(return_value=SAMPLE_QUERY_INSTANT_RESPONSE)
+        with patch('app.loki_client.LokiClient._make_request', mock_request):
             
             async with LokiClient(config) as client:
-                # Make 5 concurrent requests
-                tasks = []
-                for i in range(5):
-                    task = client.query_instant(query=f'{{job="test{i}"}}')
-                    tasks.append(task)
-                
+                tasks = [client.query_instant(query=f'{{job="test{i}"}}') for i in range(5)]
                 results = await asyncio.gather(*tasks)
                 
-                # All requests should succeed
                 for result in results:
                     assert result["status"] == "success"
                 
@@ -243,8 +226,8 @@ class TestMockLokiServerIntegration:
         """Test handling of large responses."""
         large_response = generate_large_log_dataset(1000)
         
-        with patch('app.loki_client.LokiClient._make_request') as mock_request:
-            mock_request.return_value = large_response
+        mock_request = AsyncMock(return_value=large_response)
+        with patch('app.loki_client.LokiClient._make_request', mock_request):
             
             async with LokiClient(config) as client:
                 result = await client.query_range(
@@ -256,61 +239,46 @@ class TestMockLokiServerIntegration:
                 
                 assert result["status"] == "success"
                 assert result["data"]["resultType"] == "streams"
-                
-                # Should have multiple streams
                 assert len(result["data"]["result"]) > 1
-                
-                # Count total entries across all streams
-                total_entries = sum(
-                    len(stream["values"]) 
-                    for stream in result["data"]["result"]
-                )
+                total_entries = sum(len(stream["values"]) for stream in result["data"]["result"])
                 assert total_entries == 1000
     
     @pytest.mark.asyncio
     async def test_authentication_scenarios(self, mock_server):
         """Test different authentication scenarios."""
-        # Test basic auth
         basic_auth_config = LokiConfig(
             url="http://localhost:3100",
             username="admin",
             password="secret"
         )
         
-        with patch('app.loki_client.LokiClient._make_request') as mock_request:
-            mock_request.return_value = SAMPLE_LABELS_RESPONSE
+        mock_request = AsyncMock(return_value=SAMPLE_LABELS_RESPONSE)
+        with patch('app.loki_client.LokiClient._make_request', mock_request):
             
             async with LokiClient(basic_auth_config) as client:
                 await client.label_names()
-                # Verify session was configured with basic auth
                 assert client._session.auth is not None
         
-        # Test bearer token auth
         bearer_config = LokiConfig(
             url="http://localhost:3100",
             bearer_token="test-token-123"
         )
         
-        with patch('app.loki_client.LokiClient._make_request') as mock_request:
-            mock_request.return_value = SAMPLE_LABELS_RESPONSE
+        mock_request = AsyncMock(return_value=SAMPLE_LABELS_RESPONSE)
+        with patch('app.loki_client.LokiClient._make_request', mock_request):
             
             async with LokiClient(bearer_config) as client:
                 await client.label_names()
-                # Verify session was configured with bearer token
                 assert "Authorization" in client._session.headers
                 assert client._session.headers["Authorization"] == "Bearer test-token-123"
     
     @pytest.mark.asyncio
     async def test_timeout_handling(self, config):
         """Test timeout handling."""
-        # Set short timeout for testing
         config.timeout = 0.1
         
-        # Mock the actual HTTP request to simulate timeout
-        with patch('asyncio.to_thread') as mock_to_thread:
-            # Simulate a timeout exception
-            import requests
-            mock_to_thread.side_effect = requests.exceptions.Timeout("Request timed out")
+        import requests
+        with patch('asyncio.to_thread', side_effect=requests.exceptions.Timeout("Request timed out")):
             
             async with LokiClient(config) as client:
                 with pytest.raises(LokiConnectionError, match="timed out"):
@@ -321,14 +289,11 @@ class TestMockLokiServerIntegration:
         """Test handling of empty responses."""
         empty_response = {
             "status": "success",
-            "data": {
-                "resultType": "streams",
-                "result": []
-            }
+            "data": {"resultType": "streams", "result": []}
         }
         
-        with patch('app.loki_client.LokiClient._make_request') as mock_request:
-            mock_request.return_value = empty_response
+        mock_request = AsyncMock(return_value=empty_response)
+        with patch('app.loki_client.LokiClient._make_request', mock_request):
             
             async with LokiClient(config) as client:
                 result = await client.query_range(
@@ -343,12 +308,9 @@ class TestMockLokiServerIntegration:
     @pytest.mark.asyncio
     async def test_malformed_response_handling(self, config, mock_server):
         """Test handling of malformed responses."""
-        with patch('app.loki_client.LokiClient._make_request') as mock_request:
-            # Return malformed response
-            mock_request.return_value = {"invalid": "response"}
+        mock_request = AsyncMock(return_value={"invalid": "response"})
+        with patch('app.loki_client.LokiClient._make_request', mock_request):
             
             async with LokiClient(config) as client:
                 result = await client.query_instant(query='{job="web-server"}')
-                
-                # Should still return the response even if malformed
                 assert result == {"invalid": "response"}

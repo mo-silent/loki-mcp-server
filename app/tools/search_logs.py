@@ -11,6 +11,7 @@ from ..enhanced_client import EnhancedLokiClient
 from ..loki_client import LokiClientError
 from ..config import LokiConfig
 from ..query_builder import LogQLQueryBuilder
+from ..time_utils import get_time_range
 
 logger = structlog.get_logger(__name__)
 
@@ -120,8 +121,7 @@ async def search_logs_tool(
                 for query in queries:
                     try:
                         if params.start or params.end:
-                            start_time = params.start or "1h"
-                            end_time = params.end or "now"
+                            start_time, end_time = get_time_range(params.start, params.end)
                             
                             response = await client.query_range(
                                 query=query,
@@ -131,8 +131,12 @@ async def search_logs_tool(
                                 direction="backward"
                             )
                         else:
-                            response = await client.query_instant(
+                            # For instant queries, still use a time range to avoid issues
+                            start_time, end_time = get_time_range("1h", "now")
+                            response = await client.query_range(
                                 query=query,
+                                start=start_time,
+                                end=end_time,
                                 limit=params.limit,
                                 direction="backward"
                             )
@@ -158,8 +162,7 @@ async def search_logs_tool(
             
             async with EnhancedLokiClient(config) as client:
                 if params.start or params.end:
-                    start_time = params.start or "1h"
-                    end_time = params.end or "now"
+                    start_time, end_time = get_time_range(params.start, params.end)
                     
                     response = await client.query_range(
                         query=search_query,
@@ -169,8 +172,12 @@ async def search_logs_tool(
                         direction="backward"
                     )
                 else:
-                    response = await client.query_instant(
+                    # For instant queries, still use a time range to avoid issues
+                    start_time, end_time = get_time_range("1h", "now")
+                    response = await client.query_range(
                         query=search_query,
+                        start=start_time,
+                        end=end_time,
                         limit=params.limit,
                         direction="backward"
                     )

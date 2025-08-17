@@ -15,13 +15,13 @@ class TestLogQLQueryBuilder:
     def test_build_search_query_single_keyword(self):
         """Test building search query with single keyword."""
         query = self.builder.build_search_query(["error"])
-        expected = '{}|~ "(?i)error"'
+        expected = '{__name__=~".+"}|~ "(?i)error"'
         assert query == expected
     
     def test_build_search_query_multiple_keywords(self):
         """Test building search query with multiple keywords."""
         query = self.builder.build_search_query(["error", "timeout"])
-        expected = '{}|~ "(?i)error"|~ "(?i)timeout"'
+        expected = '{__name__=~".+"}|~ "(?i)error"|~ "(?i)timeout"'
         assert query == expected
     
     def test_build_search_query_with_labels(self):
@@ -34,13 +34,13 @@ class TestLogQLQueryBuilder:
     def test_build_search_query_case_sensitive(self):
         """Test building case-sensitive search query."""
         query = self.builder.build_search_query(["Error"], case_sensitive=True)
-        expected = '{}|~ "Error"'
+        expected = '{__name__=~".+"}|~ "Error"'
         assert query == expected
     
     def test_build_search_query_escapes_special_chars(self):
         """Test that special regex characters are escaped in keywords."""
         query = self.builder.build_search_query(["error[123]"])
-        expected = '{}|~ "(?i)error\\[123\\]"'
+        expected = '{__name__=~".+"}|~ "(?i)error\\[123\\]"'
         assert query == expected
     
     def test_build_search_query_empty_keywords(self):
@@ -56,13 +56,13 @@ class TestLogQLQueryBuilder:
     def test_build_pattern_query_regex(self):
         """Test building pattern query with regex."""
         query = self.builder.build_pattern_query(r"error\d+", use_regex=True)
-        expected = '{}|~ "error\\d+"'
+        expected = '{__name__=~".+"}|~ "error\\d+"'
         assert query == expected
     
     def test_build_pattern_query_literal(self):
         """Test building pattern query with literal matching."""
         query = self.builder.build_pattern_query("error[123]", use_regex=False)
-        expected = '{}|~ "error\\[123\\]"'
+        expected = '{__name__=~".+"}|~ "error\\[123\\]"'
         assert query == expected
     
     def test_build_pattern_query_with_labels(self):
@@ -118,7 +118,7 @@ class TestLogQLQueryBuilder:
     def test_build_label_selector_empty(self):
         """Test building empty label selector."""
         selector = self.builder._build_label_selector({})
-        assert selector == "{}"
+        assert selector == '{__name__=~".+"}'
     
     def test_build_label_selector_single_label(self):
         """Test building label selector with single label."""
@@ -227,7 +227,7 @@ class TestConvenienceFunctions:
     def test_search_logs_function(self):
         """Test search_logs convenience function."""
         query = search_logs(["error", "timeout"])
-        expected = '{}|~ "(?i)error"|~ "(?i)timeout"'
+        expected = '{__name__=~".+"}|~ "(?i)error"|~ "(?i)timeout"'
         assert query == expected
     
     def test_search_logs_with_labels(self):
@@ -240,7 +240,7 @@ class TestConvenienceFunctions:
     def test_search_pattern_function(self):
         """Test search_pattern convenience function."""
         query = search_pattern(r"error\d+")
-        expected = '{}|~ "error\\d+"'
+        expected = '{__name__=~".+"}|~ "error\\d+"'
         assert query == expected
     
     def test_search_pattern_with_labels(self):

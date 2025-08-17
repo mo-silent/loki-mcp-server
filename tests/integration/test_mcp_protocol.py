@@ -148,7 +148,7 @@ class TestMCPProtocolCompliance:
                 ]
             }
         }
-        mock_client.query_instant.return_value = mock_response
+        mock_client.query_range.return_value = mock_response
         
         # Test query_logs handler directly
         result = await server._handle_query_logs({"query": "{job=\"test\"}"})
@@ -178,7 +178,7 @@ class TestMCPProtocolCompliance:
                 ]
             }
         }
-        mock_client.query_instant.return_value = mock_response
+        mock_client.query_range.return_value = mock_response
         
         # Test search_logs handler directly
         result = await server._handle_search_logs({"keywords": ["error"]})

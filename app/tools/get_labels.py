@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from ..enhanced_client import EnhancedLokiClient
 from ..loki_client import LokiClientError
 from ..config import LokiConfig
+from ..time_utils import convert_time
 
 logger = structlog.get_logger(__name__)
 
@@ -130,19 +131,23 @@ async def get_labels_tool(
     
     try:
         async with EnhancedLokiClient(config) as client:
+            # Convert time parameters to proper format
+            start_time = convert_time(params.start)
+            end_time = convert_time(params.end)
+            
             if params.label_name:
                 # Get values for specific label
                 labels = await client.label_values(
                     label=params.label_name,
-                    start=params.start,
-                    end=params.end
+                    start=start_time,
+                    end=end_time
                 )
                 label_type = "values"
             else:
                 # Get all label names
                 labels = await client.label_names(
-                    start=params.start,
-                    end=params.end
+                    start=start_time,
+                    end=end_time
                 )
                 label_type = "names"
             

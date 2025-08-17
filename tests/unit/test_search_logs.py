@@ -334,7 +334,7 @@ class TestSearchLogsTool:
         with patch('app.tools.search_logs.EnhancedLokiClient') as mock_client_class:
             mock_client = AsyncMock()
             mock_client_class.return_value.__aenter__.return_value = mock_client
-            mock_client.query_instant.return_value = sample_loki_response
+            mock_client.query_range.return_value = sample_loki_response
             
             result = await search_logs_tool(params, mock_config)
             
@@ -343,7 +343,7 @@ class TestSearchLogsTool:
             assert "OR combination" in result.query_used
             
             # Should be called twice for OR operation
-            assert mock_client.query_instant.call_count == 2
+            assert mock_client.query_range.call_count == 2
     
     async def test_instant_query_without_time_range(self, mock_config, sample_loki_response):
         """Test instant query when no time range is specified."""
@@ -352,13 +352,12 @@ class TestSearchLogsTool:
         with patch('app.tools.search_logs.EnhancedLokiClient') as mock_client_class:
             mock_client = AsyncMock()
             mock_client_class.return_value.__aenter__.return_value = mock_client
-            mock_client.query_instant.return_value = sample_loki_response
+            mock_client.query_range.return_value = sample_loki_response
             
             result = await search_logs_tool(params, mock_config)
             
             assert result.status == "success"
-            mock_client.query_instant.assert_called_once()
-            mock_client.query_range.assert_not_called()
+            mock_client.query_range.assert_called_once()
     
     async def test_loki_client_error(self, mock_config):
         """Test handling of Loki client errors."""
@@ -367,7 +366,7 @@ class TestSearchLogsTool:
         with patch('app.tools.search_logs.EnhancedLokiClient') as mock_client_class:
             mock_client = AsyncMock()
             mock_client_class.return_value.__aenter__.return_value = mock_client
-            mock_client.query_instant.side_effect = LokiClientError("Connection failed")
+            mock_client.query_range.side_effect = LokiClientError("Connection failed")
             
             result = await search_logs_tool(params, mock_config)
             
@@ -407,7 +406,7 @@ class TestSearchLogsTool:
         with patch('app.tools.search_logs.EnhancedLokiClient') as mock_client_class:
             mock_client = AsyncMock()
             mock_client_class.return_value.__aenter__.return_value = mock_client
-            mock_client.query_instant.return_value = large_response
+            mock_client.query_range.return_value = large_response
             
             result = await search_logs_tool(params, mock_config)
             

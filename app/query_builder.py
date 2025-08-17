@@ -160,7 +160,9 @@ class LogQLQueryBuilder:
             Label selector string
         """
         if not labels:
-            return "{}"
+            # Return a selector that matches any stream with at least one label
+            # This avoids the "empty-compatible value" error
+            return '{__name__=~".+"}'
         
         label_parts = []
         for key, value in labels.items():
@@ -171,7 +173,14 @@ class LogQLQueryBuilder:
             
             # Escape quotes in values
             escaped_value = value.replace('"', '\\"')
-            label_parts.append(f'{key}="{escaped_value}"')
+            
+            # Use regex matching to avoid empty-compatible values
+            if value == ".*" or value == "":
+                # For wildcard or empty values, use a non-empty regex
+                label_parts.append(f'{key}=~".+"')
+            else:
+                # For specific values, use exact match
+                label_parts.append(f'{key}="{escaped_value}"')
         
         return "{" + ", ".join(label_parts) + "}"
     
