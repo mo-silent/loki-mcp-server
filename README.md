@@ -2,6 +2,15 @@
 
 A Model Context Protocol (MCP) server that provides AI assistants with the ability to query and analyze logs from Grafana Loki. This server enables seamless integration between AI assistants and Loki, allowing for intelligent log analysis, troubleshooting, and monitoring workflows.
 
+## Architecture
+
+```
+┌─────────────────┐    MCP Protocol    ┌─────────────────┐    HTTP/API    ┌─────────────────┐
+│   AI Assistant │ ◄─────────────────► │ Loki MCP Server │ ◄─────────────►│  Grafana Loki   │
+│   (Claude et al)│                    │                 │                │   Log System    │
+└─────────────────┘                    └─────────────────┘                └─────────────────┘
+```
+
 ## Features
 
 - 🔍 **Query Logs**: Execute LogQL queries against Loki with support for range and instant queries
